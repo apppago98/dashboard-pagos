@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro de Pagos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0F1115;
+    --panel: #1A1D22;
+    --panel-alt: #20242B;
+    --line: #2A2E35;
+    --text: #F2F4F6;
+    --text-soft: #8B93A1;
+    --accent: #5DCAA5;
+    --accent-dim: #2F5C4C;
+    --amber: #E8B95E;
+    --rose: #E07A9A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    padding: 32px 20px 80px;
+  }
+
+  .page { max-width: 720px; margin: 0 auto; }
+
+  .masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 24px;
+  }
+
+  .masthead h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead .subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-soft);
+    margin-top: 4px;
+    text-transform: lowercase;
+  }
+
+  .masthead .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-soft);
+    text-align: right;
+  }
+
+  .setup {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 28px;
+  }
+
+  .setup input {
+    flex: 1;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--text);
+  }
+
+  .setup input::placeholder { color: var(--text-soft); }
+
+  .setup button {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #0B1512;
+    cursor: pointer;
+  }
+
+  .setup button:hover { opacity: 0.85; }
+
+  .status {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-soft);
+    margin: -18px 0 28px;
+    min-height: 14px;
+  }
+
+  .status.error { color: var(--rose); }
+
+  .stats-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .stat {
+    flex: 1;
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+
+  .stat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: lowercase;
+    color: var(--text-soft);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .stat-value.accent { color: var(--accent); }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-soft);
+    margin: 0 0 14px;
+  }
+
+  .chart-wrap {
+    margin-bottom: 36px;
+    padding: 16px 8px 4px;
+    background: var(--panel);
+    border-radius: 10px;
+  }
+
+  #chart { width: 100%; height: 160px; display: block; }
+
+  table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+
+  thead th {
+    text-align: left;
+    font-size: 10px;
+    text-transform: lowercase;
+    color: var(--text-soft);
+    font-weight: 400;
+    padding: 0 12px 10px;
+  }
+
+  thead th.num { text-align: right; }
+
+  tbody tr { background: var(--panel); }
+  tbody tr:nth-child(even) { background: var(--panel-alt); }
+
+  tbody td { padding: 11px 12px; }
+  tbody tr td:first-child { border-radius: 8px 0 0 8px; }
+  tbody tr td:last-child { border-radius: 0 8px 8px 0; }
+
+  td.monto { text-align: right; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  td.tipo { color: var(--text-soft); }
+
+  .empty-state {
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--text-soft);
+    font-size: 13px;
+    background: var(--panel);
+    border-radius: 10px;
+    border: 1px dashed var(--line);
+  }
+
+  .footer-note {
+    margin-top: 32px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-soft);
+    text-align: center;
+  }
+
+  @media (max-width: 480px) {
+    .stats-row { flex-direction: column; }
+    .setup { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <h1 id="bizName">Registro de pagos</h1>
+      <div class="subtitle">confirmación auditiva // bre-b / nequi</div>
+    </div>
+    <div class="date" id="todayDate"></div>
+  </div>
+
+  <div class="setup" id="setupRow">
+    <input id="sheetIdInput" type="text" placeholder="ID de tu Google Sheet (de la URL)">
+    <input id="sheetNameInput" type="text" placeholder="Hoja 1" style="max-width:110px">
+    <button onclick="loadData()">Conectar</button>
+  </div>
+  <div class="status" id="status">Pega el ID de tu hoja para conectar los datos en vivo.</div>
+
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-label">total recibido</div>
+      <div class="stat-value accent" id="statTotal">$0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">transacciones</div>
+      <div class="stat-value" id="statCount">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">promedio por pago</div>
+      <div class="stat-value" id="statAvg">$0</div>
+    </div>
+  </div>
+
+  <div class="section-title">últimos 14 días</div>
+  <div class="chart-wrap">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="section-title">detalle de transacciones</div>
+  <table id="dataTable" style="display:none">
+    <thead>
+      <tr>
+        <th>fecha</th>
+        <th>cliente</th>
+        <th class="num">monto</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+  <div class="empty-state" id="emptyState">Sin datos todavía — conecta tu hoja arriba.</div>
+
+  <div class="footer-note">actualizado automáticamente desde google sheets</div>
+</div>
+
+<script>
+document.getElementById('todayDate').textContent = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const urlParams = new URLSearchParams(window.location.search);
+const presetSheet = urlParams.get('sheet');
+const presetHoja = urlParams.get('hoja');
+const presetCliente = urlParams.get('cliente');
+
+if (presetSheet) {
+  document.getElementById('sheetIdInput').value = presetSheet;
+  if (presetHoja) document.getElementById('sheetNameInput').value = presetHoja;
+  if (presetCliente) {
+    document.getElementById('setupRow').style.display = 'none';
+  }
+  document.getElementById('bizName').textContent = presetCliente
+    ? 'Registro de pagos — ' + presetCliente
+    : 'Registro de pagos';
+  window.addEventListener('DOMContentLoaded', loadData);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  return lines.slice(1).map(line => {
+    const cells = [];
+    let cur = '', inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQuotes = !inQuotes; }
+      else if (c === ',' && !inQuotes) { cells.push(cur); cur = ''; }
+      else { cur += c; }
+    }
+    cells.push(cur);
+    return cells.map(c => c.replace(/^"|"$/g, '').trim());
+  });
+}
+
+function parseMonto(raw) {
+  if (!raw) return 0;
+  return parseFloat(raw.replace(/[^0-9.,-]/g, '').replace(/\./g, '').replace(',', '.')) || parseFloat(raw) || 0;
+}
+
+function formatCOP(n) {
+  return '$' + Math.round(n).toLocaleString('es-CO');
+}
+
+function drawChart(dailyTotals) {
+  const canvas = document.getElementById('chart');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = 160;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  const entries = Object.entries(dailyTotals);
+  if (entries.length === 0) {
+    ctx.fillStyle = '#8B93A1';
+    ctx.font = '11px IBM Plex Mono';
+    ctx.fillText('sin datos suficientes para graficar', 10, h / 2);
+    return;
+  }
+
+  const max = Math.max(...entries.map(e => e[1]), 1);
+  const padding = { left: 10, right: 10, top: 10, bottom: 22 };
+  const barW = (w - padding.left - padding.right) / entries.length;
+
+  entries.forEach(([date, val], i) => {
+    const barH = (val / max) * (h - padding.top - padding.bottom);
+    const x = padding.left + i * barW;
+    const y = h - padding.bottom - barH;
+    ctx.fillStyle = '#5DCAA5';
+    ctx.fillRect(x + barW * 0.15, y, barW * 0.7, Math.max(barH, 2));
+
+    ctx.fillStyle = '#8B93A1';
+    ctx.font = '9px IBM Plex Mono';
+    ctx.textAlign = 'center';
+    const label = date.split('/').slice(0, 2).join('/');
+    ctx.fillText(label, x + barW / 2, h - 6);
+  });
+}
+
+async function loadData() {
+  const sheetId = document.getElementById('sheetIdInput').value.trim();
+  const sheetName = document.getElementById('sheetNameInput').value.trim() || 'Hoja 1';
+  const statusEl = document.getElementById('status');
+
+  if (!sheetId) {
+    statusEl.textContent = 'Ingresa el ID de tu Google Sheet (está en la URL, entre /d/ y /edit).';
+    statusEl.className = 'status error';
+    return;
+  }
+
+  statusEl.textContent = 'Cargando...';
+  statusEl.className = 'status';
+
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('No se pudo leer la hoja. Verifica que sea pública ("cualquiera con el enlace puede ver") y que el nombre de la pestaña sea correcto.');
+    const text = await res.text();
+    const rows = parseCSV(text).filter(r => r.length >= 2 && r[0] !== '');
+
+    if (rows.length === 0) {
+      document.getElementById('emptyState').style.display = 'block';
+      document.getElementById('dataTable').style.display = 'none';
+      statusEl.textContent = 'Conectado, pero la hoja no tiene filas de datos todavía.';
+      return;
+    }
+
+    let parsed = rows.map(r => ({
+      monto: parseMonto(r[0]),
+      fecha: r[1] || '',
+      tipo: r[2] || 'sin_id'
+    }));
+
+    if (presetCliente) {
+      parsed = parsed.filter(p => p.tipo.trim().toLowerCase() === presetCliente.trim().toLowerCase());
+    }
+
+    if (parsed.length === 0) {
+      document.getElementById('emptyState').style.display = 'block';
+      document.getElementById('emptyState').textContent = presetCliente
+        ? `Sin pagos registrados todavía para "${presetCliente}".`
+        : 'Sin datos todavía.';
+      document.getElementById('dataTable').style.display = 'none';
+      document.getElementById('statTotal').textContent = formatCOP(0);
+      document.getElementById('statCount').textContent = '0';
+      document.getElementById('statAvg').textContent = formatCOP(0);
+      drawChart({});
+      statusEl.textContent = 'Conectado.';
+      return;
+    }
+
+    let total = 0;
+    const dailyTotals = {};
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+
+    parsed.forEach(p => {
+      total += p.monto;
+      const dayKey = (p.fecha.split(' ')[0]) || 'S/F';
+      dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + p.monto;
+    });
+
+    parsed.slice().reverse().forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${p.fecha}</td><td class="tipo">${p.tipo}</td><td class="monto">${formatCOP(p.monto)}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('statTotal').textContent = formatCOP(total);
+    document.getElementById('statCount').textContent = parsed.length;
+    document.getElementById('statAvg').textContent = formatCOP(total / parsed.length);
+
+    document.getElementById('dataTable').style.display = 'table';
+    document.getElementById('emptyState').style.display = 'none';
+
+    const dayEntries = Object.entries(dailyTotals).slice(-14);
+    drawChart(Object.fromEntries(dayEntries));
+
+    statusEl.textContent = `Conectado — ${parsed.length} transacciones cargadas.`;
+  } catch (err) {
+    statusEl.textContent = err.message || 'Error al conectar con la hoja.';
+    statusEl.className = 'status error';
+  }
+}
+
+window.addEventListener('resize', () => {
+  const rows = document.querySelectorAll('#tableBody tr');
+  if (rows.length) loadData();
+});
+
+// Auto-actualización cada 3 minutos mientras la página esté abierta
+setInterval(() => {
+  if (document.getElementById('sheetIdInput').value.trim()) {
+    loadData();
+  }
+}, 3 * 60 * 1000);
+</script>
+</body>
+</html>
