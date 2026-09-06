@@ -54,13 +54,48 @@
     text-align: right;
   }
 
-  .status {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: var(--text-soft);
-    margin: 0 0 28px;
-    min-height: 14px;
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
   }
+
+  .filter-row input[type="date"] {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    color: var(--text);
+    color-scheme: dark;
+  }
+
+  .filter-sep { font-size: 12px; color: var(--text-soft); }
+
+  .filter-row button {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: #0B1512;
+    cursor: pointer;
+  }
+
+  .filter-row button.ghost {
+    background: transparent;
+    color: var(--text-soft);
+    border: 1px solid var(--line);
+  }
+
+  .filter-row button:hover { opacity: 0.85; }
+
+  .status { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-soft); margin: 0 0 16px; min-height: 14px; }
 
   .status.error { color: var(--rose); }
 
@@ -142,6 +177,15 @@
 
   <div class="status" id="status">Cargando...</div>
 
+  <div class="filter-row" id="filterRow" style="display:none">
+    <input type="date" id="fechaDesde">
+    <span class="filter-sep">a</span>
+    <input type="date" id="fechaHasta">
+    <button onclick="aplicarFiltro()">Filtrar</button>
+    <button onclick="limpiarFiltro()" class="ghost">Limpiar</button>
+    <button onclick="descargarCSV()" class="ghost">⬇ Descargar CSV</button>
+  </div>
+
   <div class="stats-row">
     <div class="stat">
       <div class="stat-label">total recibido</div>
@@ -198,6 +242,24 @@ function formatCOP(n) {
   return '$' + Math.round(n).toLocaleString('es-CO');
 }
 
+function formatFechaHora(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+}
+
+function formatDiaCorto(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+}
+
+function diaKey(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toISOString().split('T')[0]; // YYYY-MM-DD, agrupa por día calendario
+}
+
 function drawChart(dailyTotals) {
   const canvas = document.getElementById('chart');
   const dpr = window.devicePixelRatio || 1;
@@ -229,10 +291,12 @@ function drawChart(dailyTotals) {
     ctx.fillStyle = '#8B93A1';
     ctx.font = '9px IBM Plex Mono';
     ctx.textAlign = 'center';
-    const label = date.split(' ')[0].split('/').slice(0, 2).join('/');
+    const label = formatDiaCorto(date);
     ctx.fillText(label, x + barW / 2, h - 6);
   });
 }
+
+let datosCompletos = []; // guarda todas las transacciones del cliente, sin filtrar
 
 async function loadData() {
   const statusEl = document.getElementById('status');
@@ -256,50 +320,105 @@ async function loadData() {
     if (!res.ok) throw new Error('No se pudo conectar con el servidor.');
     const parsed = await res.json();
 
-    if (!parsed || parsed.length === 0) {
-      document.getElementById('emptyState').style.display = 'block';
-      document.getElementById('emptyState').textContent = `Sin pagos registrados todavía para "${cliente}".`;
-      document.getElementById('dataTable').style.display = 'none';
-      document.getElementById('statTotal').textContent = formatCOP(0);
-      document.getElementById('statCount').textContent = '0';
-      document.getElementById('statAvg').textContent = formatCOP(0);
-      drawChart({});
-      statusEl.textContent = '';
-      return;
-    }
+    datosCompletos = (parsed || []).map(p => ({
+      monto: Number(p.monto) || 0,
+      fecha: p.fecha
+    }));
 
-    let total = 0;
-    const dailyTotals = {};
-    const tbody = document.getElementById('tableBody');
-    tbody.innerHTML = '';
+    document.getElementById('filterRow').style.display = datosCompletos.length ? 'flex' : 'none';
 
-    parsed.forEach(p => {
-      total += Number(p.monto) || 0;
-      const dayKey = (String(p.fecha).split(' ')[0]) || 'S/F';
-      dailyTotals[dayKey] = (dailyTotals[dayKey] || 0) + (Number(p.monto) || 0);
-    });
-
-    parsed.slice().reverse().forEach(p => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${p.fecha}</td><td class="monto">${formatCOP(p.monto)}</td>`;
-      tbody.appendChild(tr);
-    });
-
-    document.getElementById('statTotal').textContent = formatCOP(total);
-    document.getElementById('statCount').textContent = parsed.length;
-    document.getElementById('statAvg').textContent = formatCOP(total / parsed.length);
-
-    document.getElementById('dataTable').style.display = 'table';
-    document.getElementById('emptyState').style.display = 'none';
-
-    const dayEntries = Object.entries(dailyTotals).slice(-14);
-    drawChart(Object.fromEntries(dayEntries));
-
+    renderizar(datosCompletos);
     statusEl.textContent = '';
   } catch (err) {
     statusEl.textContent = err.message || 'Error al conectar.';
     statusEl.className = 'status error';
   }
+}
+
+function aplicarFiltro() {
+  const desde = document.getElementById('fechaDesde').value;
+  const hasta = document.getElementById('fechaHasta').value;
+
+  let filtrado = datosCompletos;
+  if (desde) {
+    const dDesde = new Date(desde + 'T00:00:00');
+    filtrado = filtrado.filter(p => new Date(p.fecha) >= dDesde);
+  }
+  if (hasta) {
+    const dHasta = new Date(hasta + 'T23:59:59');
+    filtrado = filtrado.filter(p => new Date(p.fecha) <= dHasta);
+  }
+  renderizar(filtrado);
+}
+
+function limpiarFiltro() {
+  document.getElementById('fechaDesde').value = '';
+  document.getElementById('fechaHasta').value = '';
+  renderizar(datosCompletos);
+}
+
+function descargarCSV() {
+  const desde = document.getElementById('fechaDesde').value;
+  const hasta = document.getElementById('fechaHasta').value;
+  let datos = datosCompletos;
+  if (desde) { const d = new Date(desde + 'T00:00:00'); datos = datos.filter(p => new Date(p.fecha) >= d); }
+  if (hasta) { const h = new Date(hasta + 'T23:59:59'); datos = datos.filter(p => new Date(p.fecha) <= h); }
+
+  if (datos.length === 0) return;
+
+  let csv = 'Fecha,Monto\n';
+  datos.slice().reverse().forEach(p => {
+    csv += `"${formatFechaHora(p.fecha)}",${p.monto}\n`;
+  });
+
+  const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `pagos_${cliente}_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+}
+
+function renderizar(parsed) {
+  if (!parsed || parsed.length === 0) {
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('emptyState').textContent = `Sin pagos en ese rango para "${cliente}".`;
+    document.getElementById('dataTable').style.display = 'none';
+    document.getElementById('statTotal').textContent = formatCOP(0);
+    document.getElementById('statCount').textContent = '0';
+    document.getElementById('statAvg').textContent = formatCOP(0);
+    drawChart({});
+    return;
+  }
+
+  let total = 0;
+  const dailyTotals = {};
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  parsed.forEach(p => {
+    total += p.monto;
+    const key = diaKey(p.fecha);
+    dailyTotals[key] = (dailyTotals[key] || 0) + p.monto;
+  });
+
+  parsed.slice().reverse().forEach(p => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${formatFechaHora(p.fecha)}</td><td class="monto">${formatCOP(p.monto)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('statTotal').textContent = formatCOP(total);
+  document.getElementById('statCount').textContent = parsed.length;
+  document.getElementById('statAvg').textContent = formatCOP(total / parsed.length);
+
+  document.getElementById('dataTable').style.display = 'table';
+  document.getElementById('emptyState').style.display = 'none';
+
+  const sortedDays = Object.keys(dailyTotals).sort();
+  const last14 = sortedDays.slice(-14);
+  const chartData = {};
+  last14.forEach(k => chartData[k] = dailyTotals[k]);
+  drawChart(chartData);
 }
 
 loadData();
