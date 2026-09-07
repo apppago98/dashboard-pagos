@@ -154,7 +154,7 @@
 // ============================================================
 // CONFIGURA ESTO UNA SOLA VEZ, con la URL de tu Apps Script
 // ============================================================
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby54gzbUvyL4sFJRw3AvfQdK0UlDmTBD3JUOt2nbllUzcYZsF_NQ1M3vHbpg3sKqTZ6/exec";
+const SCRIPT_URL = "PEGA_AQUI_LA_URL_DE_TU_APPS_SCRIPT";
 // ============================================================
 
 const cliente = new URLSearchParams(window.location.search).get('cliente');
@@ -272,8 +272,14 @@ function drawChart(dailyTotals) {
   }
 
   const max = Math.max(...entries.map(e => e[1]), 1);
-  const padding = { left: 10, right: 10, top: 10, bottom: 22 };
+  const padding = { left: 10, right: 10, top: 10, bottom: 20 };
   const barW = (w - padding.left - padding.right) / entries.length;
+
+  // En pantallas angostas no caben todas las etiquetas sin encimarse:
+  // mostramos solo la cantidad que quepa cómodamente.
+  const minLabelWidth = 34;
+  const maxLabels = Math.max(1, Math.floor(w / minLabelWidth));
+  const step = Math.ceil(entries.length / maxLabels);
 
   entries.forEach(([date, val], i) => {
     const barH = (val / max) * (h - padding.top - padding.bottom);
@@ -281,10 +287,13 @@ function drawChart(dailyTotals) {
     const y = h - padding.bottom - barH;
     ctx.fillStyle = '#5DCAA5';
     ctx.fillRect(x + barW * 0.15, y, barW * 0.7, Math.max(barH, 2));
-    ctx.fillStyle = '#8B93A1';
-    ctx.font = '9px IBM Plex Mono';
-    ctx.textAlign = 'center';
-    ctx.fillText(formatDiaCorto(date), x + barW / 2, h - 6);
+
+    if (i % step === 0) {
+      ctx.fillStyle = '#8B93A1';
+      ctx.font = '9px IBM Plex Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText(formatDiaCorto(date), x + barW / 2, h - 6);
+    }
   });
 }
 
