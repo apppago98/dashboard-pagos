@@ -59,7 +59,7 @@
 
   .section-title { font-size: 14px; font-weight: 500; color: var(--text-soft); margin: 0 0 14px; }
   .chart-wrap { margin-bottom: 36px; padding: 16px 8px 4px; background: var(--panel); border-radius: 10px; }
-  #chart { width: 100%; height: 160px; display: block; }
+  #chart { width: 100%; height: 170px; display: block; }
 
   table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
   thead th { text-align: left; font-size: 10px; text-transform: lowercase; color: var(--text-soft); font-weight: 400; padding: 0 12px 10px; }
@@ -257,7 +257,7 @@ function diaKey(iso) {
 function drawChart(dailyTotals) {
   const canvas = document.getElementById('chart');
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth, h = 160;
+  const w = canvas.clientWidth, h = 170;
   canvas.width = w * dpr; canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
@@ -272,14 +272,14 @@ function drawChart(dailyTotals) {
   }
 
   const max = Math.max(...entries.map(e => e[1]), 1);
-  const padding = { left: 10, right: 10, top: 10, bottom: 20 };
+  const padding = { left: 10, right: 10, top: 10, bottom: 34 };
   const barW = (w - padding.left - padding.right) / entries.length;
 
-  // En pantallas angostas no caben todas las etiquetas sin encimarse:
-  // mostramos solo la cantidad que quepa cómodamente.
-  const minLabelWidth = 34;
+  const minLabelWidth = 24;
   const maxLabels = Math.max(1, Math.floor(w / minLabelWidth));
   const step = Math.ceil(entries.length / maxLabels);
+
+  let mesAnterior = null;
 
   entries.forEach(([date, val], i) => {
     const barH = (val / max) * (h - padding.top - padding.bottom);
@@ -289,10 +289,21 @@ function drawChart(dailyTotals) {
     ctx.fillRect(x + barW * 0.15, y, barW * 0.7, Math.max(barH, 2));
 
     if (i % step === 0) {
+      const d = new Date(date);
+      const dia = d.toLocaleDateString('es-CO', { day: 'numeric' });
+      const mes = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+
       ctx.fillStyle = '#8B93A1';
       ctx.font = '9px IBM Plex Mono';
       ctx.textAlign = 'center';
-      ctx.fillText(formatDiaCorto(date), x + barW / 2, h - 6);
+      ctx.fillText(dia, x + barW / 2, h - 20);
+
+      if (mes !== mesAnterior) {
+        ctx.fillStyle = '#5DCAA5';
+        ctx.font = '9px IBM Plex Mono';
+        ctx.fillText(mes, x + barW / 2, h - 6);
+        mesAnterior = mes;
+      }
     }
   });
 }
