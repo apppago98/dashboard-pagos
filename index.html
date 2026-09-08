@@ -59,6 +59,14 @@
 
   .section-title { font-size: 14px; font-weight: 500; color: var(--text-soft); margin: 0 0 14px; }
   .chart-wrap { margin-bottom: 36px; padding: 16px 8px 4px; background: var(--panel); border-radius: 10px; }
+  .chart-tooltip {
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-soft);
+    padding: 8px 4px 2px;
+  }
+  .chart-tooltip.active { color: var(--accent); font-weight: 600; font-size: 13px; }
   #chart { width: 100%; height: 170px; display: block; }
 
   table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
@@ -138,7 +146,10 @@
   </div>
 
   <div class="section-title">últimos 14 días</div>
-  <div class="chart-wrap"><canvas id="chart"></canvas></div>
+  <div class="chart-wrap">
+    <canvas id="chart"></canvas>
+    <div id="chartTooltip" class="chart-tooltip">Toca una barra para ver el total de ese día</div>
+  </div>
 
   <div class="section-title">detalle de transacciones</div>
   <table id="dataTable" style="display:none">
@@ -254,7 +265,10 @@ function diaKey(iso) {
 }
 
 // --- Gráfico ---
-function drawChart(dailyTotals) {
+let barsInfo = [];
+
+function drawChart(dailyTotals, activeIdx) {
+  activeIdx = (typeof activeIdx === 'number') ? activeIdx : -1;
   const canvas = document.getElementById('chart');
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth, h = 170;
@@ -262,6 +276,12 @@ function drawChart(dailyTotals) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, w, h);
+
+  barsInfo = [];
+  if (activeIdx === -1) {
+    document.getElementById('chartTooltip').textContent = 'Toca una barra para ver el total de ese día';
+    document.getElementById('chartTooltip').className = 'chart-tooltip';
+  }
 
   const entries = Object.entries(dailyTotals);
   if (entries.length === 0) {
@@ -285,7 +305,10 @@ function drawChart(dailyTotals) {
     const barH = (val / max) * (h - padding.top - padding.bottom);
     const x = padding.left + i * barW;
     const y = h - padding.bottom - barH;
-    ctx.fillStyle = '#5DCAA5';
+
+    barsInfo.push({ x: x, width: barW, date: date, val: val });
+
+    ctx.fillStyle = i === activeIdx ? '#8FE3C6' : '#5DCAA5';
     ctx.fillRect(x + barW * 0.15, y, barW * 0.7, Math.max(barH, 2));
 
     if (i % step === 0) {
@@ -307,6 +330,31 @@ function drawChart(dailyTotals) {
     }
   });
 }
+
+function manejarToqueBarra(clientX) {
+  const canvas = document.getElementById('chart');
+  const rect = canvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+
+  const idx = barsInfo.findIndex(b => x >= b.x && x <= b.x + b.width);
+  if (idx === -1) return;
+
+  const bar = barsInfo[idx];
+  const fechaLegible = new Date(bar.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' });
+
+  const tooltip = document.getElementById('chartTooltip');
+  tooltip.textContent = `${fechaLegible}: ${formatCOP(bar.val)}`;
+  tooltip.className = 'chart-tooltip active';
+
+  const dailyTotalsActuales = {};
+  barsInfo.forEach(b => dailyTotalsActuales[b.date] = b.val);
+  drawChart(dailyTotalsActuales, idx);
+}
+
+document.getElementById('chart').addEventListener('click', (e) => manejarToqueBarra(e.clientX));
+document.getElementById('chart').addEventListener('touchstart', (e) => {
+  if (e.touches && e.touches[0]) manejarToqueBarra(e.touches[0].clientX);
+}, { passive: true });
 
 // --- Filtro por fecha ---
 function aplicarFiltro() {
