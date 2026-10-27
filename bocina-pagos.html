@@ -159,8 +159,21 @@
 // CONFIGURA ESTO UNA SOLA VEZ, con la URL de tu Apps Script
 // ============================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby54gzbUvyL4sFJRw3AvfQdK0UlDmTBD3JUOt2nbllUzcYZsF_NQ1M3vHbpg3sKqTZ6/exec";
-const INTERVALO_MS = 4000;
+
+// Bocina en tiempo real (Firebase). Si dejas apiKey vacío, funciona como antes: solo con el Sheet cada 4 s.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyB6pvOS71lEs937OC7a4joPXCZZ4GPixI8",
+  authDomain: "oidopago.firebaseapp.com",
+  databaseURL: "https://oidopago-default-rtdb.firebaseio.com",
+  projectId: "oidopago"
+};
 // ============================================================
+
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+const RESPALDO_EN_VIVO_MS = 30000;          // con Firebase conectado, el Sheet se revisa cada 30 s
+const RESPALDO_SIN_VIVO_MS = 4000;          // sin Firebase, cada 4 s (como antes)
+const EDAD_MAX_VOZ_MS = 2 * 60 * 1000;      // un pago más viejo que esto se muestra, pero no se lee en voz alta
+const VIDA_EVENTOS_MS = 24 * 3600 * 1000;   // los avisos de Firebase se borran después de 24 h
 
 const cliente = new URLSearchParams(window.location.search).get('cliente');
 const storageKey = 'token_' + (cliente || '');
@@ -171,11 +184,31 @@ let sonidoListo = false;
 let consultando = false;
 let erroresSeguidos = 0;
 let estuvoOculta = false;
+let enVivo = false;
+let temporizadorRespaldo = null;
+let ultimoMostradoTs = 0;
+const anunciadosKey = 'anunciados_' + (cliente || '');
+const anunciados = cargarAnunciados();   // id del pago → cuándo se anunció (para no repetirlo)
 
 // --- Almacenamiento seguro (algunos navegadores lo bloquean) ---
 function leerClave() { try { return localStorage.getItem(storageKey); } catch (e) { return null; } }
 function guardarClave(c) { try { localStorage.setItem(storageKey, c); } catch (e) {} }
 function borrarClave() { try { localStorage.removeItem(storageKey); } catch (e) {} }
+function cargarAnunciados() {
+  try { return new Map(JSON.parse(localStorage.getItem(anunciadosKey) || '[]')); } catch (e) { return new Map(); }
+}
+function guardarAnunciados() {
+  try { localStorage.setItem(anunciadosKey, JSON.stringify([...anunciados.entries()].slice(-200))); } catch (e) {}
+}
+
+// Pagos de OidoPago traen id (columna I del Sheet), el mismo que llega por Firebase.
+// Los de MacroDroid no traen id: se identifican por monto y fecha.
+function idDePago(p) { return p.id ? String(p.id) : (p.monto + '|' + p.fecha); }
+
+// Debe coincidir EXACTAMENTE con Relay.correo (app) y correoFirebase_ (Apps Script).
+function correoFirebase(c) {
+  return String(c || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_') + '@oidopago.app';
+}
 
 // --- Pantalla de acceso ---
 document.getElementById('claveInput').addEventListener('keydown', function(e) {
@@ -208,7 +241,7 @@ async function consultarServidor(clave) {
     const res = await fetch(`${SCRIPT_URL}?cliente=${encodeURIComponent(cliente)}&token=${encodeURIComponent(clave)}`);
     const data = await res.json();
     if (data && data.error) return null;
-    return (data || []).map(p => ({ monto: Number(p.monto) || 0, fecha: p.fecha, origen: p.origen || '' }));
+    return (data || []).map(p => ({ monto: Number(p.monto) || 0, fecha: p.fecha, origen: p.origen || '', id: p.id || '' }));
   } catch (e) {
     return null;
   }
@@ -221,33 +254,90 @@ function activarBocina(datosIniciales) {
 
   // No anunciamos el historial existente al abrir, solo lo que llegue de aquí en adelante
   ultimaCantidadVista = datosIniciales.length;
+  datosIniciales.forEach(p => anunciados.set(idDePago(p), Date.now()));
+  guardarAnunciados();
   if (datosIniciales.length > 0) mostrarUltimoPago(datosIniciales[datosIniciales.length - 1], false);
 
-  setInterval(revisarNuevosPagos, INTERVALO_MS);
+  actualizarEstado();
+  programarRespaldo();
+  conectarFirebase();
+}
+
+// --- Respaldo: Google Sheet (cada 30 s con Firebase en vivo, cada 4 s sin él) ---
+function programarRespaldo() {
+  clearTimeout(temporizadorRespaldo);
+  temporizadorRespaldo = setTimeout(revisarNuevosPagos, enVivo ? RESPALDO_EN_VIVO_MS : RESPALDO_SIN_VIVO_MS);
 }
 
 async function revisarNuevosPagos() {
-  if (!token || consultando) return;
+  if (!token) return;
+  if (consultando) { programarRespaldo(); return; }
   consultando = true;
   const data = await consultarServidor(token);
   consultando = false;
 
   if (data === null) {
     erroresSeguidos++;
-    if (erroresSeguidos >= 3) marcarEstado(false, 'sin conexión, reintentando...');
-    return;
+  } else {
+    erroresSeguidos = 0;
+    if (data.length > ultimaCantidadVista) {
+      const nuevos = data.slice(ultimaCantidadVista);
+      ultimaCantidadVista = data.length;
+      nuevos.forEach(p => procesarPago(p, new Date(p.fecha).getTime()));
+    } else if (data.length < ultimaCantidadVista) {
+      // Se borraron filas en el Sheet: solo re-sincronizamos el conteo
+      ultimaCantidadVista = data.length;
+    }
   }
-  erroresSeguidos = 0;
-  marcarEstado(true, 'escuchando pagos en vivo');
+  actualizarEstado();
+  programarRespaldo();
+}
 
-  if (data.length > ultimaCantidadVista) {
-    const nuevos = data.slice(ultimaCantidadVista);
-    ultimaCantidadVista = data.length;
-    nuevos.forEach(p => anunciarPago(p));
-  } else if (data.length < ultimaCantidadVista) {
-    // Se borraron filas en el Sheet: solo re-sincronizamos el conteo
-    ultimaCantidadVista = data.length;
+// --- Tiempo real: Firebase ---
+async function conectarFirebase() {
+  if (!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) return;   // sin Firebase: solo Sheet
+  try {
+    const [appMod, authMod, db] = await Promise.all([
+      import(FIREBASE_SDK + 'firebase-app.js'),
+      import(FIREBASE_SDK + 'firebase-auth.js'),
+      import(FIREBASE_SDK + 'firebase-database.js')
+    ]);
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    const cred = await authMod.signInWithEmailAndPassword(authMod.getAuth(app), correoFirebase(cliente), token);
+    const base = db.getDatabase(app);
+    const raiz = db.ref(base, 'eventos/' + cred.user.uid);
+
+    db.onValue(db.ref(base, '.info/connected'), s => {
+      enVivo = s.val() === true;
+      actualizarEstado();
+      programarRespaldo();
+    });
+
+    const recientes = db.query(raiz, db.orderByChild('ts'), db.startAt(Date.now() - EDAD_MAX_VOZ_MS));
+    db.onChildAdded(recientes, s => {
+      const v = s.val() || {};
+      procesarPago({ id: s.key, monto: Number(v.monto) || 0, origen: v.origen || '', fecha: new Date(Number(v.ts)) }, Number(v.ts));
+    });
+
+    limpiarViejos(db, raiz);
+  } catch (e) {
+    console.warn('Firebase no disponible; la bocina sigue con el Sheet.', e);
   }
+}
+
+async function limpiarViejos(db, raiz) {
+  try {
+    const viejos = await db.get(db.query(raiz, db.orderByChild('ts'), db.endAt(Date.now() - VIDA_EVENTOS_MS)));
+    const borrar = {};
+    viejos.forEach(h => { borrar[h.key] = null; });
+    if (Object.keys(borrar).length) await db.update(raiz, borrar);
+  } catch (e) { /* no es crítico */ }
+}
+
+function actualizarEstado() {
+  if (enVivo) marcarEstado(true, 'escuchando pagos en vivo');
+  else if (erroresSeguidos >= 3) marcarEstado(false, 'sin conexión, reintentando...');
+  else marcarEstado(true, 'escuchando pagos (revisión cada 4 s)');
 }
 
 function marcarEstado(ok, texto) {
@@ -264,9 +354,17 @@ function nombreOrigen(origen) {
   return NOMBRES_ORIGEN[k] || k.replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function anunciarPago(pago) {
-  mostrarUltimoPago(pago, true);
-  hablar(textoAnuncio(pago));
+// Llega por Firebase o por el Sheet: se anuncia una sola vez.
+function procesarPago(pago, ts) {
+  const id = idDePago(pago);
+  if (anunciados.has(id)) return;   // ya lo anunció la otra vía
+  anunciados.set(id, Date.now());
+  guardarAnunciados();
+  if (!(pago.monto > 0)) return;
+
+  if (!isFinite(ts) || ts >= ultimoMostradoTs) mostrarUltimoPago(pago, true);
+  // Un pago que llega tarde (celular sin señal) se muestra, pero no se lee: evita anunciarlo frente a otro cliente.
+  if (!isFinite(ts) || Date.now() - ts <= EDAD_MAX_VOZ_MS) hablar(textoAnuncio(pago));
 }
 
 function textoAnuncio(pago) {
@@ -280,6 +378,7 @@ function mostrarUltimoPago(pago, animar) {
   document.getElementById('ultimoMonto').textContent = '$' + Math.round(pago.monto).toLocaleString('es-CO');
   document.getElementById('ultimoOrigen').textContent = nombreOrigen(pago.origen);
   const d = new Date(pago.fecha);
+  if (!isNaN(d)) ultimoMostradoTs = Math.max(ultimoMostradoTs, d.getTime());
   document.getElementById('ultimaFecha').textContent = isNaN(d)
     ? pago.fecha
     : d.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
