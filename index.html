@@ -35,18 +35,37 @@
   .masthead .subtitle { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-soft); margin-top: 4px; text-transform: lowercase; }
   .masthead .date { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-soft); text-align: right; }
 
-  .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
-  .filter-row input[type="date"] {
+  /* --- Botones de periodo (píldoras) --- */
+  .period-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 500;
+    padding: 9px 18px; border-radius: 999px; cursor: pointer;
+    background: var(--panel); color: var(--text-soft); border: 1px solid var(--line);
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .pill:hover { color: var(--text); border-color: #3A3F48; }
+  .pill.active { background: var(--accent); color: #0B1512; border-color: var(--accent); font-weight: 600; }
+
+  .btn-ghost {
+    font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 500; padding: 8px 14px;
+    border-radius: 6px; background: transparent; color: var(--text-soft); border: 1px solid var(--line); cursor: pointer;
+  }
+  .btn-ghost:hover { color: var(--text); }
+
+  .range-row { display: none; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .range-row.visible { display: flex; }
+  .range-row input[type="date"] {
     font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 8px 10px;
     border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); color-scheme: dark;
   }
-  .filter-sep { font-size: 12px; color: var(--text-soft); }
-  .filter-row button {
+  .range-row .sep { font-size: 12px; color: var(--text-soft); }
+  .range-row button.apply {
     font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 500; padding: 8px 14px;
     border: none; border-radius: 6px; background: var(--accent); color: #0B1512; cursor: pointer;
   }
-  .filter-row button.ghost { background: transparent; color: var(--text-soft); border: 1px solid var(--line); }
-  .filter-row button:hover { opacity: 0.85; }
+
+  .period-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-soft); margin: 0 0 18px; }
 
   .status { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-soft); margin: 0 0 16px; min-height: 14px; }
   .status.error { color: var(--rose); }
@@ -67,7 +86,7 @@
     padding: 8px 4px 2px;
   }
   .chart-tooltip.active { color: var(--accent); font-weight: 600; font-size: 13px; }
-  #chart { width: 100%; height: 170px; display: block; }
+  #chart { width: 100%; height: 170px; display: block; cursor: pointer; }
 
   table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
   thead th { text-align: left; font-size: 10px; text-transform: lowercase; color: var(--text-soft); font-weight: 400; padding: 0 12px 10px; }
@@ -79,6 +98,10 @@
   tbody tr td:last-child { border-radius: 0 8px 8px 0; }
   td.origen { color: var(--text-soft); text-transform: capitalize; }
   td.monto { text-align: right; font-weight: 600; color: var(--accent); white-space: nowrap; }
+
+  .table-foot { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 14px; }
+  .table-count { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text-soft); }
+  #btnVerMas { display: none; }
 
   .empty-state { text-align: center; padding: 50px 20px; color: var(--text-soft); font-size: 13px; background: var(--panel); border-radius: 10px; border: 1px dashed var(--line); }
   .footer-note { margin-top: 32px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text-soft); text-align: center; }
@@ -98,6 +121,7 @@
 
   @media (max-width: 480px) {
     .stats-row { flex-direction: column; }
+    .pill { padding: 8px 14px; font-size: 12px; }
   }
 </style>
 </head>
@@ -122,14 +146,24 @@
 
   <div class="status" id="status"></div>
 
-  <div class="filter-row" id="filterRow" style="display:none">
-    <input type="date" id="fechaDesde">
-    <span class="filter-sep">a</span>
-    <input type="date" id="fechaHasta">
-    <button onclick="aplicarFiltro()">Filtrar</button>
-    <button onclick="limpiarFiltro()" class="ghost">Limpiar</button>
-    <button onclick="descargarCSV()" class="ghost">⬇ Descargar CSV</button>
+  <div class="period-row">
+    <div class="pills" id="pills">
+      <button class="pill" data-periodo="hoy">Hoy</button>
+      <button class="pill active" data-periodo="semana">Esta semana</button>
+      <button class="pill" data-periodo="mes">Este mes</button>
+      <button class="pill" data-periodo="rango">Rango</button>
+    </div>
+    <button class="btn-ghost" onclick="descargarCSV()">⬇ Descargar CSV</button>
   </div>
+
+  <div class="range-row" id="rangeRow">
+    <input type="date" id="fechaDesde">
+    <span class="sep">a</span>
+    <input type="date" id="fechaHasta">
+    <button class="apply" onclick="aplicarRango()">Aplicar</button>
+  </div>
+
+  <div class="period-label" id="periodLabel"></div>
 
   <div class="stats-row">
     <div class="stat">
@@ -140,16 +174,12 @@
       <div class="stat-label">transacciones</div>
       <div class="stat-value" id="statCount">0</div>
     </div>
-    <div class="stat">
-      <div class="stat-label">promedio por pago</div>
-      <div class="stat-value" id="statAvg">$0</div>
-    </div>
   </div>
 
-  <div class="section-title">últimos 14 días</div>
+  <div class="section-title" id="chartTitle">esta semana</div>
   <div class="chart-wrap">
     <canvas id="chart"></canvas>
-    <div id="chartTooltip" class="chart-tooltip">Toca una barra para ver el total de ese día</div>
+    <div id="chartTooltip" class="chart-tooltip">Toca una barra para ver su total</div>
   </div>
 
   <div class="section-title">detalle de transacciones</div>
@@ -157,6 +187,10 @@
     <thead><tr><th>fecha</th><th>origen</th><th class="num">monto</th></tr></thead>
     <tbody id="tableBody"></tbody>
   </table>
+  <div class="table-foot" id="tableFoot" style="display:none">
+    <div class="table-count" id="tableCount"></div>
+    <button class="btn-ghost" id="btnVerMas" onclick="verMas()">Ver más</button>
+  </div>
   <div class="empty-state" id="emptyState">Sin datos todavía.</div>
 
   <div class="footer-note">actualizado automáticamente</div>
@@ -169,10 +203,20 @@
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby54gzbUvyL4sFJRw3AvfQdK0UlDmTBD3JUOt2nbllUzcYZsF_NQ1M3vHbpg3sKqTZ6/exec";
 // ============================================================
 
+const PAGOS_POR_PAGINA = 50;   // filas que muestra la tabla antes de "Ver más"
+const PERIODO_INICIAL = 'semana'; // la página siempre abre en "Esta semana"
+
 const cliente = new URLSearchParams(window.location.search).get('cliente');
 const storageKey = 'token_' + (cliente || '');
 let token = null;
 let datosCompletos = [];
+
+let periodoActual = PERIODO_INICIAL;
+let rangoActual = null;        // { desde, hasta (exclusivo), modo, titulo, etiqueta }
+let datosPeriodo = [];         // pagos del periodo, más recientes primero
+let filasVisibles = PAGOS_POR_PAGINA;
+let bucketsActuales = [];
+let barsInfo = [];
 
 // --- Pantalla de acceso ---
 document.getElementById('claveInput').addEventListener('keydown', function(e) {
@@ -208,7 +252,9 @@ async function intentarConToken(clave) {
     const data = await res.json();
     if (data && data.error) return false;
     token = clave;
-    datosCompletos = (data || []).map(p => ({ monto: Number(p.monto) || 0, fecha: p.fecha, origen: p.origen || '' }));
+    datosCompletos = (data || [])
+      .map(p => ({ monto: Number(p.monto) || 0, fecha: new Date(p.fecha), origen: p.origen || '' }))
+      .filter(p => !isNaN(p.fecha));
     return true;
   } catch (e) {
     return false;
@@ -220,8 +266,7 @@ function entrarADashboard() {
   document.getElementById('dashboardScreen').style.display = 'block';
   document.getElementById('todayDate').textContent = new Date().toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
   if (cliente) document.getElementById('bizName').textContent = 'Registro de pagos — ' + cliente;
-  document.getElementById('filterRow').style.display = datosCompletos.length ? 'flex' : 'none';
-  renderizar(datosCompletos);
+  seleccionarPeriodo(PERIODO_INICIAL);
   setInterval(refrescar, 3 * 60 * 1000);
 }
 
@@ -229,8 +274,9 @@ async function refrescar() {
   if (!token) return;
   const ok = await intentarConToken(token);
   if (ok) {
-    document.getElementById('filterRow').style.display = datosCompletos.length ? 'flex' : 'none';
-    renderizar(datosCompletos);
+    // Se recalcula el periodo (por si cambió el día) sin perder lo que la persona eligió ni las filas abiertas
+    if (periodoActual !== 'rango') rangoActual = calcularRango(periodoActual);
+    renderizar(false);
   }
 }
 
@@ -244,31 +290,184 @@ async function refrescar() {
   }
 })();
 
+// --- Utilidades de fecha (todo en hora local del dispositivo) ---
+const DIA_MS = 86400000;
+
+function inicioDia(d) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+function sumarDias(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function inicioSemana(d) { const x = inicioDia(d); return sumarDias(x, -((x.getDay() + 6) % 7)); } // lunes
+function aInputFecha(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function desdeInputFecha(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+
+function fmtDiaMes(d) { return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }).replace('.', ''); }
+function fmtDiaLargo(d) { return d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }); }
+function fmtHora12(h) {
+  const suf = h < 12 ? 'a. m.' : 'p. m.';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return h12 + ' ' + suf;
+}
+
 // --- Utilidades de formato ---
 function formatCOP(n) { return '$' + Math.round(n).toLocaleString('es-CO'); }
 
-function formatFechaHora(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
+function formatFechaHora(d) {
+  if (isNaN(d)) return '';
   return d.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 }
 
-function formatDiaCorto(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+// --- Periodos ---
+function calcularRango(periodo, desdeStr, hastaStr) {
+  const hoy = inicioDia(new Date());
+
+  if (periodo === 'hoy') {
+    return { desde: hoy, hasta: sumarDias(hoy, 1), modo: 'hora',
+             titulo: 'hoy, por hora', etiqueta: fmtDiaLargo(hoy) };
+  }
+  if (periodo === 'semana') {
+    const lunes = inicioSemana(hoy);
+    const domingo = sumarDias(lunes, 6);
+    return { desde: lunes, hasta: sumarDias(lunes, 7), modo: 'dia',
+             titulo: 'esta semana, por día', etiqueta: `lunes ${fmtDiaMes(lunes)} – domingo ${fmtDiaMes(domingo)}` };
+  }
+  if (periodo === 'mes') {
+    const ini = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1);
+    const nombre = ini.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+    return { desde: ini, hasta: fin, modo: 'dia', titulo: 'este mes, por día', etiqueta: nombre };
+  }
+
+  // Rango personalizado
+  let a = desdeInputFecha(desdeStr), b = desdeInputFecha(hastaStr);
+  if (a > b) { const t = a; a = b; b = t; }
+  const hasta = sumarDias(b, 1);
+  const dias = Math.round((hasta - a) / DIA_MS);
+  let modo = 'dia', titulo = 'rango, por día';
+  if (dias === 1)       { modo = 'hora';   titulo = 'rango, por hora'; }
+  else if (dias > 366)  { modo = 'mes';    titulo = 'rango, por mes'; }
+  else if (dias > 62)   { modo = 'semana'; titulo = 'rango, por semana'; }
+  return { desde: a, hasta: hasta, modo: modo, titulo: titulo,
+           etiqueta: `${fmtDiaMes(a)} ${a.getFullYear()} – ${fmtDiaMes(b)} ${b.getFullYear()} · ${dias} día${dias === 1 ? '' : 's'}` };
 }
 
-function diaKey(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return iso;
-  return d.toISOString().split('T')[0];
+function marcarPill(periodo) {
+  document.querySelectorAll('#pills .pill').forEach(b => b.classList.toggle('active', b.dataset.periodo === periodo));
+}
+
+function seleccionarPeriodo(periodo) {
+  const rangeRow = document.getElementById('rangeRow');
+  if (periodo === 'rango') {
+    // Solo muestra los campos; se aplica con el botón "Aplicar"
+    rangeRow.classList.add('visible');
+    const dEl = document.getElementById('fechaDesde'), hEl = document.getElementById('fechaHasta');
+    if (!dEl.value || !hEl.value) {
+      const hoy = inicioDia(new Date());
+      hEl.value = aInputFecha(hoy);
+      dEl.value = aInputFecha(sumarDias(hoy, -29));
+    }
+    marcarPill('rango');
+    return;
+  }
+  rangeRow.classList.remove('visible');
+  periodoActual = periodo;
+  rangoActual = calcularRango(periodo);
+  marcarPill(periodo);
+  renderizar(true);
+}
+
+function aplicarRango() {
+  const desde = document.getElementById('fechaDesde').value;
+  const hasta = document.getElementById('fechaHasta').value;
+  if (!desde || !hasta) return;
+  periodoActual = 'rango';
+  rangoActual = calcularRango('rango', desde, hasta);
+  marcarPill('rango');
+  renderizar(true);
+}
+
+document.querySelectorAll('#pills .pill').forEach(b => b.addEventListener('click', () => seleccionarPeriodo(b.dataset.periodo)));
+
+// --- Barras de la gráfica según el periodo ---
+function construirBuckets(datos, r) {
+  const buckets = [];
+
+  if (r.modo === 'hora') {
+    let hIni = 6, hFin = 22;
+    datos.forEach(p => { const h = p.fecha.getHours(); if (h < hIni) hIni = h; if (h > hFin) hFin = h; });
+    for (let h = hIni; h <= hFin; h++) {
+      buckets.push({ val: 0, l1: String(h % 12 === 0 ? 12 : h % 12), l2: h === hIni || h === 12 ? (h < 12 ? 'am' : 'pm') : '',
+                     tip: `${fmtHora12(h)} – ${fmtHora12((h + 1) % 24)}` });
+    }
+    datos.forEach(p => { buckets[p.fecha.getHours() - hIni].val += p.monto; });
+    return buckets;
+  }
+
+  if (r.modo === 'dia') {
+    const totalDias = Math.round((r.hasta - r.desde) / DIA_MS);
+    const pocos = totalDias <= 7;
+    let mesAnterior = null;
+    for (let i = 0; i < totalDias; i++) {
+      const d = sumarDias(r.desde, i);
+      const mes = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+      let l1, l2;
+      if (pocos) {
+        l1 = d.toLocaleDateString('es-CO', { weekday: 'short' }).replace('.', '');
+        l2 = String(d.getDate());
+      } else {
+        l1 = String(d.getDate());
+        l2 = mes !== mesAnterior ? mes : '';
+        mesAnterior = mes;
+      }
+      buckets.push({ val: 0, l1: l1, l2: l2, tip: fmtDiaLargo(d) });
+    }
+    datos.forEach(p => {
+      const i = Math.floor((inicioDia(p.fecha) - r.desde) / DIA_MS + 0.5);
+      if (buckets[i]) buckets[i].val += p.monto;
+    });
+    return buckets;
+  }
+
+  if (r.modo === 'semana') {
+    let ini = inicioSemana(r.desde);
+    let mesAnterior = null;
+    const inicios = [];
+    while (ini < r.hasta) {
+      const mes = ini.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
+      buckets.push({ val: 0, l1: String(ini.getDate()), l2: mes !== mesAnterior ? mes : '',
+                     tip: `semana del ${fmtDiaMes(ini)} ${ini.getFullYear()}` });
+      inicios.push(ini.getTime());
+      mesAnterior = mes;
+      ini = sumarDias(ini, 7);
+    }
+    datos.forEach(p => {
+      const i = Math.floor((inicioSemana(p.fecha) - inicios[0]) / (7 * DIA_MS) + 0.5);
+      if (buckets[i]) buckets[i].val += p.monto;
+    });
+    return buckets;
+  }
+
+  // modo 'mes'
+  let y = r.desde.getFullYear(), m = r.desde.getMonth();
+  const y0 = y, m0 = m;
+  let anioAnterior = null;
+  while (new Date(y, m, 1) < r.hasta) {
+    const d = new Date(y, m, 1);
+    buckets.push({ val: 0, l1: d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', ''),
+                   l2: y !== anioAnterior ? String(y) : '',
+                   tip: d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }) });
+    anioAnterior = y;
+    m++; if (m > 11) { m = 0; y++; }
+  }
+  datos.forEach(p => {
+    const i = (p.fecha.getFullYear() - y0) * 12 + (p.fecha.getMonth() - m0);
+    if (buckets[i]) buckets[i].val += p.monto;
+  });
+  return buckets;
 }
 
 // --- Gráfico ---
-let barsInfo = [];
-
-function drawChart(dailyTotals, activeIdx) {
+function drawChart(buckets, activeIdx) {
   activeIdx = (typeof activeIdx === 'number') ? activeIdx : -1;
   const canvas = document.getElementById('chart');
   const dpr = window.devicePixelRatio || 1;
@@ -280,53 +479,52 @@ function drawChart(dailyTotals, activeIdx) {
 
   barsInfo = [];
   if (activeIdx === -1) {
-    document.getElementById('chartTooltip').textContent = 'Toca una barra para ver el total de ese día';
-    document.getElementById('chartTooltip').className = 'chart-tooltip';
+    const tt = document.getElementById('chartTooltip');
+    tt.textContent = 'Toca una barra para ver su total';
+    tt.className = 'chart-tooltip';
   }
 
-  const entries = Object.entries(dailyTotals);
-  if (entries.length === 0) {
+  if (!buckets.length || buckets.every(b => b.val === 0)) {
     ctx.fillStyle = '#8B93A1';
     ctx.font = '11px IBM Plex Mono';
-    ctx.fillText('sin datos suficientes para graficar', 10, h / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('sin pagos en este periodo', w / 2, h / 2);
+    // Aun así se guardan las barras, para que un toque muestre $0
+    const barW0 = (w - 20) / Math.max(buckets.length, 1);
+    buckets.forEach((b, i) => barsInfo.push({ x: 10 + i * barW0, width: barW0 }));
     return;
   }
 
-  const max = Math.max(...entries.map(e => e[1]), 1);
+  const max = Math.max(...buckets.map(b => b.val), 1);
   const padding = { left: 10, right: 10, top: 10, bottom: 34 };
-  const barW = (w - padding.left - padding.right) / entries.length;
+  const barW = (w - padding.left - padding.right) / buckets.length;
 
-  const minLabelWidth = 24;
-  const maxLabels = Math.max(1, Math.floor(w / minLabelWidth));
-  const step = Math.ceil(entries.length / maxLabels);
+  const minLabelWidth = 26;
+  const maxLabels = Math.max(1, Math.floor((w - padding.left - padding.right) / minLabelWidth));
+  const step = Math.ceil(buckets.length / maxLabels);
 
-  let mesAnterior = null;
-
-  entries.forEach(([date, val], i) => {
-    const barH = (val / max) * (h - padding.top - padding.bottom);
+  buckets.forEach((b, i) => {
+    const barH = (b.val / max) * (h - padding.top - padding.bottom);
     const x = padding.left + i * barW;
     const y = h - padding.bottom - barH;
 
-    barsInfo.push({ x: x, width: barW, date: date, val: val });
+    barsInfo.push({ x: x, width: barW });
 
-    ctx.fillStyle = i === activeIdx ? '#8FE3C6' : '#5DCAA5';
-    ctx.fillRect(x + barW * 0.15, y, barW * 0.7, Math.max(barH, 2));
+    // Días/horas sin pagos se ven como una raya baja y tenue
+    ctx.fillStyle = i === activeIdx ? '#8FE3C6' : (b.val > 0 ? '#5DCAA5' : '#2F343C');
+    ctx.fillRect(x + barW * 0.15, b.val > 0 ? y : h - padding.bottom - 2, barW * 0.7, b.val > 0 ? Math.max(barH, 2) : 2);
 
-    if (i % step === 0) {
-      const d = new Date(date);
-      const dia = d.toLocaleDateString('es-CO', { day: 'numeric' });
-      const mes = d.toLocaleDateString('es-CO', { month: 'short' }).replace('.', '');
-
-      ctx.fillStyle = '#8B93A1';
-      ctx.font = '9px IBM Plex Mono';
+    if (i % step === 0 || b.l2) {
       ctx.textAlign = 'center';
-      ctx.fillText(dia, x + barW / 2, h - 20);
-
-      if (mes !== mesAnterior) {
+      if (i % step === 0) {
+        ctx.fillStyle = '#8B93A1';
+        ctx.font = '9px IBM Plex Mono';
+        ctx.fillText(b.l1, x + barW / 2, h - 20);
+      }
+      if (b.l2) {
         ctx.fillStyle = '#5DCAA5';
         ctx.font = '9px IBM Plex Mono';
-        ctx.fillText(mes, x + barW / 2, h - 6);
-        mesAnterior = mes;
+        ctx.fillText(b.l2, x + barW / 2, h - 6);
       }
     }
   });
@@ -338,18 +536,13 @@ function manejarToqueBarra(clientX) {
   const x = clientX - rect.left;
 
   const idx = barsInfo.findIndex(b => x >= b.x && x <= b.x + b.width);
-  if (idx === -1) return;
+  if (idx === -1 || !bucketsActuales[idx]) return;
 
-  const bar = barsInfo[idx];
-  const fechaLegible = new Date(bar.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' });
-
+  const b = bucketsActuales[idx];
   const tooltip = document.getElementById('chartTooltip');
-  tooltip.textContent = `${fechaLegible}: ${formatCOP(bar.val)}`;
+  drawChart(bucketsActuales, idx);
+  tooltip.textContent = `${b.tip}: ${formatCOP(b.val)}`;
   tooltip.className = 'chart-tooltip active';
-
-  const dailyTotalsActuales = {};
-  barsInfo.forEach(b => dailyTotalsActuales[b.date] = b.val);
-  drawChart(dailyTotalsActuales, idx);
 }
 
 document.getElementById('chart').addEventListener('click', (e) => manejarToqueBarra(e.clientX));
@@ -357,80 +550,80 @@ document.getElementById('chart').addEventListener('touchstart', (e) => {
   if (e.touches && e.touches[0]) manejarToqueBarra(e.touches[0].clientX);
 }, { passive: true });
 
-// --- Filtro por fecha ---
-function aplicarFiltro() {
-  const desde = document.getElementById('fechaDesde').value;
-  const hasta = document.getElementById('fechaHasta').value;
-  let filtrado = datosCompletos;
-  if (desde) { const d = new Date(desde + 'T00:00:00'); filtrado = filtrado.filter(p => new Date(p.fecha) >= d); }
-  if (hasta) { const h = new Date(hasta + 'T23:59:59'); filtrado = filtrado.filter(p => new Date(p.fecha) <= h); }
-  renderizar(filtrado);
-}
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { if (rangoActual) drawChart(bucketsActuales); }, 150);
+});
 
-function limpiarFiltro() {
-  document.getElementById('fechaDesde').value = '';
-  document.getElementById('fechaHasta').value = '';
-  renderizar(datosCompletos);
-}
-
+// --- CSV (exporta el periodo que se está viendo) ---
 function descargarCSV() {
-  const desde = document.getElementById('fechaDesde').value;
-  const hasta = document.getElementById('fechaHasta').value;
-  let datos = datosCompletos;
-  if (desde) { const d = new Date(desde + 'T00:00:00'); datos = datos.filter(p => new Date(p.fecha) >= d); }
-  if (hasta) { const h = new Date(hasta + 'T23:59:59'); datos = datos.filter(p => new Date(p.fecha) <= h); }
-  if (datos.length === 0) return;
+  if (!datosPeriodo.length) return;
 
   let csv = 'Fecha,Origen,Monto\n';
-  datos.slice().reverse().forEach(p => { csv += `"${formatFechaHora(p.fecha)}","${p.origen || ''}",${p.monto}\n`; });
+  datosPeriodo.forEach(p => { csv += `"${formatFechaHora(p.fecha)}","${p.origen || ''}",${p.monto}\n`; });
 
-  const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+  const r = rangoActual;
+  const nombre = `pagos_${cliente}_${aInputFecha(r.desde)}_a_${aInputFecha(sumarDias(r.hasta, -1))}.csv`;
+  const blob = new Blob(["﻿" + csv], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `pagos_${cliente}_${new Date().toISOString().split('T')[0]}.csv`;
+  link.download = nombre;
   link.click();
 }
 
-// --- Render principal ---
-function renderizar(parsed) {
-  if (!parsed || parsed.length === 0) {
-    document.getElementById('emptyState').style.display = 'block';
-    document.getElementById('emptyState').textContent = `Sin pagos en ese rango para "${cliente}".`;
-    document.getElementById('dataTable').style.display = 'none';
-    document.getElementById('statTotal').textContent = formatCOP(0);
-    document.getElementById('statCount').textContent = '0';
-    document.getElementById('statAvg').textContent = formatCOP(0);
-    drawChart({});
-    return;
-  }
-
-  let total = 0;
-  const dailyTotals = {};
+// --- Tabla (últimos 50, con "Ver más") ---
+function pintarTabla() {
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '';
 
-  parsed.forEach(p => {
-    total += p.monto;
-    const key = diaKey(p.fecha);
-    dailyTotals[key] = (dailyTotals[key] || 0) + p.monto;
-  });
-
-  parsed.slice().reverse().forEach(p => {
+  datosPeriodo.slice(0, filasVisibles).forEach(p => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${formatFechaHora(p.fecha)}</td><td class="origen">${p.origen || '—'}</td><td class="monto">${formatCOP(p.monto)}</td>`;
+    const tdF = document.createElement('td'); tdF.textContent = formatFechaHora(p.fecha);
+    const tdO = document.createElement('td'); tdO.className = 'origen'; tdO.textContent = p.origen || '—';
+    const tdM = document.createElement('td'); tdM.className = 'monto'; tdM.textContent = formatCOP(p.monto);
+    tr.append(tdF, tdO, tdM);
     tbody.appendChild(tr);
   });
 
-  document.getElementById('statTotal').textContent = formatCOP(total);
-  document.getElementById('statCount').textContent = parsed.length;
-  document.getElementById('statAvg').textContent = formatCOP(total / parsed.length);
-  document.getElementById('dataTable').style.display = 'table';
-  document.getElementById('emptyState').style.display = 'none';
+  const mostrados = Math.min(filasVisibles, datosPeriodo.length);
+  document.getElementById('tableCount').textContent =
+    datosPeriodo.length > mostrados
+      ? `mostrando los últimos ${mostrados} de ${datosPeriodo.length} pagos`
+      : `${datosPeriodo.length} pago${datosPeriodo.length === 1 ? '' : 's'}`;
+  document.getElementById('btnVerMas').style.display = datosPeriodo.length > mostrados ? 'inline-block' : 'none';
+}
 
-  const sortedDays = Object.keys(dailyTotals).sort();
-  const chartData = {};
-  sortedDays.slice(-14).forEach(k => chartData[k] = dailyTotals[k]);
-  drawChart(chartData);
+function verMas() {
+  filasVisibles += PAGOS_POR_PAGINA;
+  pintarTabla();
+}
+
+// --- Render principal ---
+function renderizar(reiniciarTabla) {
+  const r = rangoActual;
+  if (!r) return;
+  if (reiniciarTabla) filasVisibles = PAGOS_POR_PAGINA;
+
+  datosPeriodo = datosCompletos
+    .filter(p => p.fecha >= r.desde && p.fecha < r.hasta)
+    .sort((a, b) => b.fecha - a.fecha);
+
+  const total = datosPeriodo.reduce((s, p) => s + p.monto, 0);
+  document.getElementById('statTotal').textContent = formatCOP(total);
+  document.getElementById('statCount').textContent = datosPeriodo.length;
+  document.getElementById('periodLabel').textContent = r.etiqueta;
+  document.getElementById('chartTitle').textContent = r.titulo;
+
+  bucketsActuales = construirBuckets(datosPeriodo, r);
+  drawChart(bucketsActuales);
+
+  const hay = datosPeriodo.length > 0;
+  document.getElementById('dataTable').style.display = hay ? 'table' : 'none';
+  document.getElementById('tableFoot').style.display = hay ? 'flex' : 'none';
+  document.getElementById('emptyState').style.display = hay ? 'none' : 'block';
+  document.getElementById('emptyState').textContent = `Sin pagos en este periodo para "${cliente}".`;
+  if (hay) pintarTabla();
 }
 </script>
 </body>
