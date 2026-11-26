@@ -282,6 +282,21 @@ async function refrescar() {
 
 // Si este dispositivo ya guardó la clave antes, entra directo sin preguntar
 (async function autoEntrar() {
+  // Link directo: ?cliente=NOMBRE&token=CLAVE entra sin pedir la clave y la guarda en este dispositivo
+  const params = new URLSearchParams(window.location.search);
+  const tokenLink = (params.get('token') || '').trim();
+  if (cliente && tokenLink) {
+    params.delete('token');
+    const limpia = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
+    history.replaceState(null, '', limpia); // quita la clave de la barra de direcciones
+    const okLink = await intentarConToken(tokenLink);
+    if (okLink) {
+      localStorage.setItem(storageKey, tokenLink);
+      entrarADashboard();
+      return;
+    }
+    document.getElementById('gateError').textContent = 'El link tiene una clave incorrecta.';
+  }
   const claveGuardada = cliente ? localStorage.getItem(storageKey) : null;
   if (claveGuardada) {
     const ok = await intentarConToken(claveGuardada);
